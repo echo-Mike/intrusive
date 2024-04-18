@@ -258,8 +258,8 @@ func (s *SList[Ops, T]) Median() (median *T) {
 	s.verifyNoCycle()
 
 	median = s.first
-	half := (s.size - s.size%2) / 2
-	for i := 0; i < half; i++ {
+	half := (s.size + s.size%2) / 2
+	for i := 0; i < half-1; i++ {
 		median = s.ops.Hook(median).next
 	}
 	return
@@ -305,6 +305,8 @@ func (s *SList[Ops, T]) Merge(other *SList[Ops, T], less func(lhs, rhs *T) bool)
 // Merge sort based implementation
 func (s *SList[Ops, T]) sort(head *T, less func(lhs, rhs *T) bool) (first, last *T) {
 	if head == nil || s.ops.Hook(head).next == nil {
+		first = head
+		last = first
 		return
 	}
 
