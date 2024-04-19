@@ -43,6 +43,10 @@ func Reduce[E any, U any](g func() E, f func(E, U) U, b U, n int) (r U) {
 	return
 }
 
+func Take[E any](g func() E, n int) []E {
+	return Reduce(g, Append[E], make([]E, 0, n), n)
+}
+
 func Filter[S ~[]E, E any](s S, f func(E) bool) []E {
 	return Reduce(Next(s), func(e E, c []E) []E {
 		if f(e) {
