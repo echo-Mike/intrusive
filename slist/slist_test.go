@@ -13,21 +13,19 @@ type testEmbedItem struct {
 	value int
 }
 
-type embedOps struct{}
-
-func (embedOps) Hook(self *testEmbedItem) *Hook[testEmbedItem] {
+func embedHook(self *testEmbedItem) *Hook[testEmbedItem] {
 	return &self.Hook
 }
 
-func newEmbedList() SList[embedOps, testEmbedItem] {
-	return New(embedOps{})
+func newEmbedList() SList[testEmbedItem] {
+	return New(embedHook)
 }
 
 func newEmbed(value int) testEmbedItem {
 	return testEmbedItem{Hook: NewHook[testEmbedItem](), value: value}
 }
 
-func newEmbedListGenerate(count int, generator func(position int) int) (l SList[embedOps, testEmbedItem]) {
+func newEmbedListGenerate(count int, generator func(position int) int) (l SList[testEmbedItem]) {
 	l = newEmbedList()
 	for i := 0; i < count; i++ {
 		item := newEmbed(generator(i))
@@ -40,7 +38,7 @@ func lessEmbed(lhs, rhs *testEmbedItem) bool {
 	return lhs.value < rhs.value
 }
 
-func nextEmbed(l SList[embedOps, testEmbedItem]) func() int {
+func nextEmbed(l SList[testEmbedItem]) func() int {
 	first := l.Front()
 	return func() int {
 		defer func() { first = first.Next() }()
@@ -53,21 +51,19 @@ type testMemberItem struct {
 	value int
 }
 
-type memberOps struct{}
-
-func (memberOps) Hook(self *testMemberItem) *Hook[testMemberItem] {
+func memberHook(self *testMemberItem) *Hook[testMemberItem] {
 	return &self.hook
 }
 
-func newMemberList() SList[memberOps, testMemberItem] {
-	return New(memberOps{})
+func newMemberList() SList[testMemberItem] {
+	return New(memberHook)
 }
 
 func newMember(value int) testMemberItem {
 	return testMemberItem{hook: NewHook[testMemberItem](), value: value}
 }
 
-func newMemberListGenerate(count int, generator func(position int) int) (l SList[memberOps, testMemberItem]) {
+func newMemberListGenerate(count int, generator func(position int) int) (l SList[testMemberItem]) {
 	l = newMemberList()
 	for i := 0; i < count; i++ {
 		item := newMember(generator(i))
@@ -80,7 +76,7 @@ func lessMember(lhs, rhs *testMemberItem) bool {
 	return lhs.value < rhs.value
 }
 
-func nextMember(l SList[memberOps, testMemberItem]) func() int {
+func nextMember(l SList[testMemberItem]) func() int {
 	first := l.Front()
 	return func() int {
 		defer func() { first = first.hook.Next() }()
@@ -2054,12 +2050,12 @@ type fuzzEmbedItem struct {
 
 type fuzzEmbedOps struct{}
 
-func (fuzzEmbedOps) Hook(self *fuzzEmbedItem) *Hook[fuzzEmbedItem] {
+func fuzzEmbedHook(self *fuzzEmbedItem) *Hook[fuzzEmbedItem] {
 	return &self.Hook
 }
 
-func newFuzzList() SList[fuzzEmbedOps, fuzzEmbedItem] {
-	return New(fuzzEmbedOps{})
+func newFuzzList() SList[fuzzEmbedItem] {
+	return New(fuzzEmbedHook)
 }
 
 func newFuzz(value int) fuzzEmbedItem {
@@ -2088,7 +2084,7 @@ const (
 	opCOUNT
 )
 
-func elementAt(l SList[fuzzEmbedOps, fuzzEmbedItem], pos int) (r *fuzzEmbedItem) {
+func elementAt(l SList[fuzzEmbedItem], pos int) (r *fuzzEmbedItem) {
 	r = l.Front()
 	for range pos {
 		if r != nil {
@@ -2098,7 +2094,7 @@ func elementAt(l SList[fuzzEmbedOps, fuzzEmbedItem], pos int) (r *fuzzEmbedItem)
 	return
 }
 
-func nextState(items []fuzzEmbedItem, lists []SList[fuzzEmbedOps, fuzzEmbedItem]) func(op, arg1, arg2, arg3 byte) {
+func nextState(items []fuzzEmbedItem, lists []SList[fuzzEmbedItem]) func(op, arg1, arg2, arg3 byte) {
 	return func(op, arg1, arg2, arg3 byte) {
 		switch op % opCOUNT {
 		case opInsertAfter:
@@ -2236,7 +2232,7 @@ func FuzzSListOps(f *testing.F) {
 	for i := range cap(items) {
 		items = append(items, newFuzz(i%16))
 	}
-	lists := make([]SList[fuzzEmbedOps, fuzzEmbedItem], 0, 5)
+	lists := make([]SList[fuzzEmbedItem], 0, 5)
 	for range cap(lists) {
 		lists = append(lists, newFuzzList())
 	}

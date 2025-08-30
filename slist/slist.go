@@ -7,13 +7,9 @@ type (
 		next *T
 	}
 
-	Operations[T any] interface {
-		Hook(self *T) *Hook[T]
-	}
-
 	// Head structure of singly-linked list intrusive container
-	SList[Ops Operations[T], T any] struct {
-		ops         Ops
+	SList[T any] struct {
+		hookFunc    func(*T) *Hook[T]
 		size        int
 		first, last *T
 	}
@@ -38,35 +34,32 @@ func NewHook[T any]() Hook[T] {
 }
 
 // Create new SList container
-func New[Ops Operations[T], T any](ops Ops) SList[Ops, T] {
-	return SList[Ops, T]{ops: ops, size: 0, first: nil, last: nil}
+func New[T any](hookFunc func(*T) *Hook[T]) SList[T] {
+	return SList[T]{hookFunc: hookFunc, size: 0, first: nil, last: nil}
 }
 
 // Initialize SList to empty state
-func (s *SList[Ops, T]) Init() {
+func (s *SList[T]) Init() {
 	s.first = nil
 	s.last = nil
 	s.size = 0
 }
 
-// This function is not exported as it do not swap ops and exporting it will lead to one of:
-//
-// 1. Unexpected behavior from users (as ops are ton swapped)
-//
-// 2. Requirement for Ops type to implement swap or be trivially swappable (via copy)
-func (s *SList[Ops, T]) swap(other *SList[Ops, T]) {
+// Swap content of two SList heads
+func (s *SList[T]) Swap(other *SList[T]) {
+	other.hookFunc, s.hookFunc = s.hookFunc, other.hookFunc
 	other.first, s.first = s.first, other.first
 	other.last, s.last = s.last, other.last
 	other.size, s.size = s.size, other.size
 }
 
 // Get current length of SList
-func (s SList[Ops, T]) Len() int {
+func (s SList[T]) Len() int {
 	return s.size
 }
 
 // Insert new element after specified. Position SHOULD be part of current SList
-func (s *SList[Ops, T]) InsertAfter(position, element *T) {
+func (s *SList[T]) InsertAfter(position, element *T) {
 	s.verifyNotEmpty()
 	s.verifyElementNotLinked(element)
 	s.verifyIsMemberOfCurrent(position)
@@ -74,8 +67,8 @@ func (s *SList[Ops, T]) InsertAfter(position, element *T) {
 	defer s.verifyNoCycle()
 	defer s.verifySize()
 
-	s.ops.Hook(element).next = s.ops.Hook(position).next
-	s.ops.Hook(position).next = element
+	s.hookFunc(element).next = s.hookFunc(position).next
+	s.hookFunc(position).next = element
 	if s.last == position {
 		s.last = element
 	}
@@ -83,25 +76,25 @@ func (s *SList[Ops, T]) InsertAfter(position, element *T) {
 }
 
 // Unlink and return element after specified. Position SHOULD be part of current SList. Return nil if position is at the end of SList
-func (s *SList[Ops, T]) RemoveAfter(position *T) (popped *T) {
+func (s *SList[T]) RemoveAfter(position *T) (popped *T) {
 	s.verifyNotEmpty()
 	s.verifyNoCycle()
 	s.verifyIsMemberOfCurrent(position)
 	defer s.verifySize()
 
-	if popped = s.ops.Hook(position).next; popped != nil {
-		s.ops.Hook(position).next = s.ops.Hook(popped).next
+	if popped = s.hookFunc(position).next; popped != nil {
+		s.hookFunc(position).next = s.hookFunc(popped).next
 		if s.last == popped {
 			s.last = position
 		}
 		s.size--
-		s.ops.Hook(popped).Init()
+		s.hookFunc(popped).Init()
 	}
 	return
 }
 
 // Move elements from other SList to be included in current SList after position
-func (s *SList[Ops, T]) SpliceAfter(position *T, other *SList[Ops, T]) {
+func (s *SList[T]) SpliceAfter(position *T, other *SList[T]) {
 	if other.first == nil {
 		return
 	}
@@ -113,8 +106,8 @@ func (s *SList[Ops, T]) SpliceAfter(position *T, other *SList[Ops, T]) {
 	defer s.verifyNoCycle()
 	defer s.verifySize()
 
-	s.ops.Hook(other.last).next = s.ops.Hook(position).next
-	s.ops.Hook(position).next = other.first
+	s.hookFunc(other.last).next = s.hookFunc(position).next
+	s.hookFunc(position).next = other.first
 	if s.last == position {
 		s.last = other.last
 	}
@@ -123,12 +116,12 @@ func (s *SList[Ops, T]) SpliceAfter(position *T, other *SList[Ops, T]) {
 }
 
 // Return first element in SList
-func (s SList[Ops, T]) Front() *T {
+func (s SList[T]) Front() *T {
 	return s.first
 }
 
 // Insert new element into the head of SList
-func (s *SList[Ops, T]) PushFront(element *T) {
+func (s *SList[T]) PushFront(element *T) {
 	s.verifyElementNotLinked(element)
 	defer s.verifyIsMemberOfCurrent(element)
 	defer s.verifyNoCycle()
@@ -137,14 +130,14 @@ func (s *SList[Ops, T]) PushFront(element *T) {
 	if s.first == nil {
 		s.last = element
 	} else {
-		s.ops.Hook(element).next = s.first
+		s.hookFunc(element).next = s.first
 	}
 	s.first = element
 	s.size++
 }
 
 // Unlink and return element at the head of a SList
-func (s *SList[Ops, T]) PopFront() (popped *T) {
+func (s *SList[T]) PopFront() (popped *T) {
 	if s.first == nil {
 		return nil
 	}
@@ -158,26 +151,26 @@ func (s *SList[Ops, T]) PopFront() (popped *T) {
 		s.first = nil
 		s.last = nil
 	} else {
-		s.first = s.ops.Hook(popped).next
+		s.first = s.hookFunc(popped).next
 	}
 	s.size--
-	s.ops.Hook(popped).Init()
+	s.hookFunc(popped).Init()
 	return
 }
 
 // Move elements from other SList to be included at the head of current SList
-func (s *SList[Ops, T]) SpliceFront(other *SList[Ops, T]) {
+func (s *SList[T]) SpliceFront(other *SList[T]) {
 	other.SpliceBack(s)
-	s.swap(other)
+	s.Swap(other)
 }
 
 // Return last element in SList
-func (s SList[Ops, T]) Back() *T {
+func (s SList[T]) Back() *T {
 	return s.last
 }
 
 // Insert new element into the tail of current SList
-func (s *SList[Ops, T]) PushBack(element *T) {
+func (s *SList[T]) PushBack(element *T) {
 	s.verifyElementNotLinked(element)
 	defer s.verifyIsMemberOfCurrent(element)
 	defer s.verifyNoCycle()
@@ -186,17 +179,17 @@ func (s *SList[Ops, T]) PushBack(element *T) {
 	if s.last == nil {
 		s.first = element
 	} else {
-		s.ops.Hook(s.last).next = element
+		s.hookFunc(s.last).next = element
 	}
 	s.last = element
 	s.size++
-	s.ops.Hook(element).Init()
+	s.hookFunc(element).Init()
 }
 
 // Move elements from other SList to be included at the tail of current SList
-func (s *SList[Ops, T]) SpliceBack(other *SList[Ops, T]) {
+func (s *SList[T]) SpliceBack(other *SList[T]) {
 	if s.first == nil {
-		s.swap(other)
+		s.Swap(other)
 		return
 	}
 	s.SpliceAfter(s.last, other)
@@ -204,14 +197,14 @@ func (s *SList[Ops, T]) SpliceBack(other *SList[Ops, T]) {
 
 // Clear SList and return all currently linked elements as slice.
 // Use Init() to clear SList without allocations
-func (s *SList[Ops, T]) Clear() (elements []*T) {
+func (s *SList[T]) Clear() (elements []*T) {
 	s.verifyNoCycle()
 
 	elements = make([]*T, 0, s.size)
 	e := s.first
 	for e != nil {
 		elements = append(elements, e)
-		h := s.ops.Hook(e)
+		h := s.hookFunc(e)
 		e = h.Next()
 		h.Init()
 	}
@@ -220,7 +213,7 @@ func (s *SList[Ops, T]) Clear() (elements []*T) {
 }
 
 // Reverse current SList in place
-func (s *SList[Ops, T]) Reverse() {
+func (s *SList[T]) Reverse() {
 	s.verifyNoCycle()
 	defer s.verifyNoCycle()
 	defer s.verifySize()
@@ -228,23 +221,23 @@ func (s *SList[Ops, T]) Reverse() {
 	var prev *T = nil
 	e := s.first
 	for e != nil {
-		next := s.ops.Hook(e).next
-		s.ops.Hook(e).next = prev
+		next := s.hookFunc(e).next
+		s.hookFunc(e).next = prev
 		prev = e
 		e = next
 	}
 	s.first, s.last = s.last, s.first
 }
 
-func (s *SList[Ops, T]) median(l *T) (slow *T) {
+func (s *SList[T]) median(l *T) (slow *T) {
 	slow = l
-	fast := s.ops.Hook(l).next
+	fast := s.hookFunc(l).next
 
 	for fast != nil {
-		fast = s.ops.Hook(fast).next
+		fast = s.hookFunc(fast).next
 		if fast != nil {
-			slow = s.ops.Hook(slow).next
-			fast = s.ops.Hook(fast).next
+			slow = s.hookFunc(slow).next
+			fast = s.hookFunc(fast).next
 		}
 	}
 	return
@@ -253,45 +246,45 @@ func (s *SList[Ops, T]) median(l *T) (slow *T) {
 // Return element in the center of SList.
 //
 // If list size is even last element in first half is returned
-func (s *SList[Ops, T]) Median() (median *T) {
+func (s *SList[T]) Median() (median *T) {
 	s.verifySize()
 	s.verifyNoCycle()
 
 	median = s.first
 	half := (s.size + s.size%2) / 2
 	for i := 0; i < half-1; i++ {
-		median = s.ops.Hook(median).next
+		median = s.hookFunc(median).next
 	}
 	return
 }
 
-func (s *SList[Ops, T]) merge(a, b *T, less func(lhs, rhs *T) bool) (first, last *T) {
+func (s *SList[T]) merge(a, b *T, less func(lhs, rhs *T) bool) (first, last *T) {
 	if a != nil && (b != nil && less(a, b) || b == nil) {
 		first = a
-		a = s.ops.Hook(a).next
+		a = s.hookFunc(a).next
 	} else {
 		first = b
 		if b != nil {
-			b = s.ops.Hook(b).next
+			b = s.hookFunc(b).next
 		}
 	}
 	last = first
 	for a != nil || b != nil {
 		if a != nil && (b != nil && less(a, b) || b == nil) {
-			s.ops.Hook(last).next = a
+			s.hookFunc(last).next = a
 			last = a
-			a = s.ops.Hook(a).next
+			a = s.hookFunc(a).next
 		} else {
-			s.ops.Hook(last).next = b
+			s.hookFunc(last).next = b
 			last = b
-			b = s.ops.Hook(b).next
+			b = s.hookFunc(b).next
 		}
 	}
 	return
 }
 
 // Merge sorted lists into current SList
-func (s *SList[Ops, T]) Merge(other *SList[Ops, T], less func(lhs, rhs *T) bool) {
+func (s *SList[T]) Merge(other *SList[T], less func(lhs, rhs *T) bool) {
 	s.verifyNoCycle()
 	other.verifyNoCycle()
 	defer s.verifyNoCycle()
@@ -303,16 +296,16 @@ func (s *SList[Ops, T]) Merge(other *SList[Ops, T], less func(lhs, rhs *T) bool)
 }
 
 // Merge sort based implementation
-func (s *SList[Ops, T]) sort(head *T, less func(lhs, rhs *T) bool) (first, last *T) {
-	if head == nil || s.ops.Hook(head).next == nil {
+func (s *SList[T]) sort(head *T, less func(lhs, rhs *T) bool) (first, last *T) {
+	if head == nil || s.hookFunc(head).next == nil {
 		first = head
 		last = first
 		return
 	}
 
 	m := s.median(head)
-	tail := s.ops.Hook(m).next
-	s.ops.Hook(m).next = nil
+	tail := s.hookFunc(m).next
+	s.hookFunc(m).next = nil
 
 	head, _ = s.sort(head, less)
 	tail, _ = s.sort(tail, less)
@@ -322,7 +315,7 @@ func (s *SList[Ops, T]) sort(head *T, less func(lhs, rhs *T) bool) (first, last 
 }
 
 // Sort current SList in place
-func (s *SList[Ops, T]) Sort(less func(lhs, rhs *T) bool) {
+func (s *SList[T]) Sort(less func(lhs, rhs *T) bool) {
 	if s.first == nil || s.first == s.last {
 		return
 	}
@@ -333,8 +326,8 @@ func (s *SList[Ops, T]) Sort(less func(lhs, rhs *T) bool) {
 
 	// One iteration here just will be a bit faster as Median is based on size
 	m := s.Median()
-	tail := s.ops.Hook(m).next
-	s.ops.Hook(m).next = nil
+	tail := s.hookFunc(m).next
+	s.hookFunc(m).next = nil
 
 	head, _ := s.sort(s.first, less)
 	tail, _ = s.sort(tail, less)
@@ -345,17 +338,17 @@ func (s *SList[Ops, T]) Sort(less func(lhs, rhs *T) bool) {
 // Iterate over current SList applying f to each element and their parent
 //
 // This function iterates over SList safely meaning users can delete cur in f
-func (s *SList[Ops, T]) adjacent(f func(prev, cur *T)) {
+func (s *SList[T]) adjacent(f func(prev, cur *T)) {
 	s.verifyNotEmpty()
 
 	var p *T = s.first
-	e := s.ops.Hook(p).next
+	e := s.hookFunc(p).next
 	for e != nil {
 		f(p, e)
-		n := s.ops.Hook(p).next
+		n := s.hookFunc(p).next
 		if n == e {
 			p = e
-			e = s.ops.Hook(e).next
+			e = s.hookFunc(e).next
 		} else {
 			e = n
 		}
@@ -363,7 +356,7 @@ func (s *SList[Ops, T]) adjacent(f func(prev, cur *T)) {
 }
 
 // Remove consecutive duplicate elements and return all removed elements as slice
-func (s *SList[Ops, T]) Unique(less func(lhs, rhs *T) bool) (elements []*T) {
+func (s *SList[T]) Unique(less func(lhs, rhs *T) bool) (elements []*T) {
 	elements = make([]*T, 0)
 	if s.first == nil {
 		return
@@ -377,14 +370,14 @@ func (s *SList[Ops, T]) Unique(less func(lhs, rhs *T) bool) (elements []*T) {
 }
 
 // Remove elements satisfying predicate and return all removed elements as slice
-func (s *SList[Ops, T]) RemoveIf(predicate func(value *T) bool) (elements []*T) {
+func (s *SList[T]) RemoveIf(predicate func(value *T) bool) (elements []*T) {
 	elements = make([]*T, 0)
 	if s.first == nil {
 		return
 	}
 	front := s.first
 	for front != nil && predicate(front) {
-		front = s.ops.Hook(front).next
+		front = s.hookFunc(front).next
 		elements = append(elements, s.PopFront())
 	}
 	if front != nil {
