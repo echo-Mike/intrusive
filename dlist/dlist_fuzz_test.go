@@ -1,14 +1,12 @@
 package dlist
 
-import (
-	"testing"
-)
+import "testing"
 
 type fuzzEmbedItem struct {
 	Hook[fuzzEmbedItem]
 	value  int
 	isUsed bool
-	id     int // Unique identifier for better debugging
+	id     int
 }
 
 func fuzzEmbedHook(self *fuzzEmbedItem) *Hook[fuzzEmbedItem] {
@@ -254,13 +252,12 @@ func nextState(t *testing.T, items []fuzzEmbedItem, lists []DList[fuzzEmbedItem]
 }
 
 func FuzzDListOps(f *testing.F) {
-	// Use more items and lists for better coverage
 	const numItems = 512
 	const numLists = 8
 
 	items := make([]fuzzEmbedItem, numItems)
 	for i := range items {
-		items[i] = newFuzz(i%32, i) // More varied values
+		items[i] = newFuzz(i%32, i)
 	}
 
 	lists := make([]DList[fuzzEmbedItem], numLists)
@@ -269,7 +266,6 @@ func FuzzDListOps(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, commands []byte) {
-		// Reset all lists and items before each fuzz run
 		for i := range lists {
 			if elements := lists[i].Clear(); len(elements) > 0 {
 				for _, e := range elements {
@@ -285,12 +281,10 @@ func FuzzDListOps(f *testing.F) {
 
 		next := nextState(t, items, lists)
 
-		// Process commands in chunks of 4 bytes
 		for i := 0; i+3 < len(commands); i += 4 {
 			next(commands[i], commands[i+1], commands[i+2], commands[i+3])
 		}
 
-		// Verify all lists at the end of the sequence
 		for i := range lists {
 			verifyListConsistency(t, &lists[i])
 		}

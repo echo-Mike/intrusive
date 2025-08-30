@@ -6,6 +6,7 @@ type fuzzEmbedItem struct {
 	Hook[fuzzEmbedItem]
 	value  int
 	isUsed bool
+	id     int
 }
 
 func fuzzEmbedHook(self *fuzzEmbedItem) *Hook[fuzzEmbedItem] {
@@ -16,8 +17,8 @@ func newFuzzList() SList[fuzzEmbedItem] {
 	return New(fuzzEmbedHook)
 }
 
-func newFuzz(value int) fuzzEmbedItem {
-	return fuzzEmbedItem{Hook: NewHook[fuzzEmbedItem](), value: value, isUsed: false}
+func newFuzz(value, id int) fuzzEmbedItem {
+	return fuzzEmbedItem{Hook: NewHook[fuzzEmbedItem](), value: value, isUsed: false, id: id}
 }
 
 func lessFuzz(lhs, rhs *fuzzEmbedItem) bool {
@@ -39,165 +40,207 @@ const (
 	opSort
 	opUnique
 	opRemoveIf
+	opVerifyList
 	opCOUNT
 )
 
 func elementAt(l SList[fuzzEmbedItem], pos int) (r *fuzzEmbedItem) {
 	r = l.Front()
-	for range pos {
-		if r != nil {
-			r = r.Next()
-		}
+	for i := 0; i < pos && r != nil; i++ {
+		r = r.Next()
 	}
 	return
 }
 
-func nextState(items []fuzzEmbedItem, lists []SList[fuzzEmbedItem]) func(op, arg1, arg2, arg3 byte) {
+func verifyListConsistency(t *testing.T, l *SList[fuzzEmbedItem]) {
+	if l.Empty() {
+		if l.Front() != nil || l.Back() != nil || l.Size() != 0 {
+			t.Errorf("Empty list inconsistency: front=%v, back=%v, size=%d", l.Front(), l.Back(), l.Size())
+		}
+		return
+	}
+
+	// Verify forward traversal
+	count := 0
+	current := l.Front()
+	var last *fuzzEmbedItem
+
+	for current != nil {
+		count++
+		last = current
+		current = l.hookFunc(current).next
+	}
+
+	// Verify size matches traversal count
+	if count != l.Size() {
+		t.Errorf("Size inconsistency: forward=%d, stored=%d", count, l.Size())
+	}
+
+	// Verify back pointer points to last element
+	if l.Back() != last {
+		t.Errorf("Back pointer inconsistency: expected=%v, actual=%v", last, l.Back())
+	}
+
+	// Verify last element's next is nil
+	if l.hookFunc(l.Back()).next != nil {
+		t.Errorf("Last element should not have a next pointer")
+	}
+}
+
+func nextState(t *testing.T, items []fuzzEmbedItem, lists []SList[fuzzEmbedItem]) func(op, arg1, arg2, arg3 byte) {
 	return func(op, arg1, arg2, arg3 byte) {
+		listIdx := int(arg1) % len(lists)
+		itemIdx := int(arg2) % len(items)
+		positionIdx := int(arg3)
+
+		l := &lists[listIdx]
+		i := &items[itemIdx]
+
 		switch op % opCOUNT {
 		case opInsertAfter:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				i := &items[int(arg2)%len(items)]
-				if el := elementAt(*l, int(arg3)); el != nil && !i.isUsed {
-					l.InsertAfter(el, i)
+			if !i.isUsed {
+				if pos := elementAt(*l, positionIdx); pos != nil {
+					l.InsertAfter(pos, i)
 					i.isUsed = true
 				}
 			}
+
 		case opRemoveAfter:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				if el := elementAt(*l, int(arg2)); el != nil {
-					i := l.RemoveAfter(el)
-					if i != nil {
-						i.isUsed = false
-					}
+			if pos := elementAt(*l, positionIdx); pos != nil {
+				if removed := l.RemoveAfter(pos); removed != nil {
+					removed.isUsed = false
 				}
 			}
+
 		case opSpliceAfter:
-			{
-				if int(arg1)%len(lists) != int(arg2)%len(lists) {
-					l1 := &lists[int(arg1)%len(lists)]
-					l2 := &lists[int(arg2)%len(lists)]
-					if el := elementAt(*l1, int(arg3)); el != nil {
-						l1.SpliceAfter(el, l2)
-					}
+			if listIdx != int(arg2)%len(lists) {
+				l2 := &lists[int(arg2)%len(lists)]
+				if pos := elementAt(*l, positionIdx); pos != nil {
+					l.SpliceAfter(pos, l2)
 				}
 			}
+
 		case opPushFront:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				i := &items[int(arg2)%len(items)]
-				if !i.isUsed {
-					l.PushFront(i)
-					i.isUsed = true
-				}
+			if !i.isUsed {
+				l.PushFront(i)
+				i.isUsed = true
 			}
+
 		case opPopFront:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				if el := l.PopFront(); el != nil {
-					el.isUsed = false
-				}
+			if el := l.PopFront(); el != nil {
+				el.isUsed = false
 			}
+
 		case opSpliceFront:
-			{
-				if int(arg1)%len(lists) != int(arg2)%len(lists) {
-					l1 := &lists[int(arg1)%len(lists)]
-					l2 := &lists[int(arg2)%len(lists)]
-					l1.SpliceFront(l2)
-				}
+			if listIdx != int(arg2)%len(lists) {
+				l2 := &lists[int(arg2)%len(lists)]
+				l.SpliceFront(l2)
 			}
+
 		case opPushBack:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				i := &items[int(arg2)%len(items)]
-				if !i.isUsed {
-					l.PushBack(i)
-					i.isUsed = true
-				}
+			if !i.isUsed {
+				l.PushBack(i)
+				i.isUsed = true
 			}
+
 		case opSpliceBack:
-			{
-				if int(arg1)%len(lists) != int(arg2)%len(lists) {
-					l1 := &lists[int(arg1)%len(lists)]
-					l2 := &lists[int(arg2)%len(lists)]
-					l1.SpliceBack(l2)
-				}
+			if listIdx != int(arg2)%len(lists) {
+				l2 := &lists[int(arg2)%len(lists)]
+				l.SpliceBack(l2)
 			}
+
 		case opClear:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				if el := l.Clear(); 0 < len(el) {
-					for _, e := range el {
-						e.isUsed = false
-					}
+			if elements := l.Clear(); len(elements) > 0 {
+				for _, e := range elements {
+					e.isUsed = false
 				}
 			}
+
 		case opReverse:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				l.Reverse()
-			}
+			l.Reverse()
+
 		case opMerge:
-			{
-				if int(arg1)%len(lists) != int(arg2)%len(lists) {
-					l1 := &lists[int(arg1)%len(lists)]
-					l2 := &lists[int(arg2)%len(lists)]
-					l1.Sort(lessFuzz)
-					l2.Sort(lessFuzz)
-					l1.Merge(l2, lessFuzz)
-				}
+			if listIdx != int(arg2)%len(lists) {
+				l2 := &lists[int(arg2)%len(lists)]
+				l.Sort(lessFuzz)
+				l2.Sort(lessFuzz)
+				l.Merge(l2, lessFuzz)
 			}
+
 		case opSort:
-			{
-				l := &lists[int(arg1)%len(lists)]
+			l.Sort(lessFuzz)
+
+		case opUnique:
+			if int(arg2)%2 == 0 {
 				l.Sort(lessFuzz)
 			}
-		case opUnique:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				if int(arg2)%2 == 0 {
-					l.Sort(lessFuzz)
-				}
-				if el := l.Unique(lessFuzz); 0 < len(el) {
-					for _, e := range el {
-						e.isUsed = false
-					}
+			if elements := l.Unique(lessFuzz); len(elements) > 0 {
+				for _, e := range elements {
+					e.isUsed = false
 				}
 			}
+
 		case opRemoveIf:
-			{
-				l := &lists[int(arg1)%len(lists)]
-				var f func(*fuzzEmbedItem) bool
-				if int(arg2)%2 == 0 {
-					f = func(e *fuzzEmbedItem) bool { return e.value%2 == 0 }
-				} else {
-					f = func(e *fuzzEmbedItem) bool { return e.value%2 == 1 }
-				}
-				if el := l.RemoveIf(f); 0 < len(el) {
-					for _, e := range el {
-						e.isUsed = false
-					}
+			var predicate func(*fuzzEmbedItem) bool
+			switch int(arg2) % 4 {
+			case 0:
+				predicate = func(e *fuzzEmbedItem) bool { return e.value%2 == 0 }
+			case 1:
+				predicate = func(e *fuzzEmbedItem) bool { return e.value%2 == 1 }
+			case 2:
+				predicate = func(e *fuzzEmbedItem) bool { return e.value < 8 }
+			case 3:
+				predicate = func(e *fuzzEmbedItem) bool { return e.value >= 8 }
+			}
+
+			if elements := l.RemoveIf(predicate); len(elements) > 0 {
+				for _, e := range elements {
+					e.isUsed = false
 				}
 			}
+
+		case opVerifyList:
+			verifyListConsistency(t, l)
 		}
 	}
 }
 
 func FuzzSListOps(f *testing.F) {
-	items := make([]fuzzEmbedItem, 0, 256)
-	for i := range cap(items) {
-		items = append(items, newFuzz(i%16))
+	const numItems = 512
+	const numLists = 8
+
+	items := make([]fuzzEmbedItem, numItems)
+	for i := range items {
+		items[i] = newFuzz(i%32, i)
 	}
-	lists := make([]SList[fuzzEmbedItem], 0, 5)
-	for range cap(lists) {
-		lists = append(lists, newFuzzList())
+
+	lists := make([]SList[fuzzEmbedItem], numLists)
+	for i := range lists {
+		lists[i] = newFuzzList()
 	}
-	next := nextState(items, lists)
+
 	f.Fuzz(func(t *testing.T, commands []byte) {
-		for i := 0; i < len(commands)/4; i++ {
-			next(commands[0+4*i], commands[1+4*i], commands[2+4*i], commands[3+4*i])
+		for i := range lists {
+			if elements := lists[i].Clear(); len(elements) > 0 {
+				for _, e := range elements {
+					e.isUsed = false
+				}
+			}
+		}
+
+		for i := range items {
+			items[i].isUsed = false
+			items[i].Hook.Init()
+		}
+
+		next := nextState(t, items, lists)
+
+		for i := 0; i+3 < len(commands); i += 4 {
+			next(commands[i], commands[i+1], commands[i+2], commands[i+3])
+		}
+
+		for i := range lists {
+			verifyListConsistency(t, &lists[i])
 		}
 	})
 }
