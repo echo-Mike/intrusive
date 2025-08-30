@@ -21,3 +21,7 @@ Design goals for this library are:
 * One object should be able to be inserted in as many containers as amount of embedded metadata it has
 * Be functionally complete based on existing containers in [Go](https://pkg.go.dev/container/list) and [C++](https://en.cppreference.com/w/cpp/container)
 * Container interface should be similar across all implemented containers
+
+## Attribution
+
+This project was developed with the assistance of a large language model (LLM) DeepSeek-V3 noreply@deepseek.com.
