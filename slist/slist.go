@@ -45,6 +45,21 @@ func (s *SList[T]) Init() {
 	s.size = 0
 }
 
+// Check if SList is empty
+func (s SList[T]) Empty() bool {
+	return s.size == 0
+}
+
+// Get current length of SList
+func (s SList[T]) Size() int {
+	return s.size
+}
+
+// Get current length of SList
+func (s SList[T]) Len() int {
+	return s.size
+}
+
 // Swap content of two SList heads
 func (s *SList[T]) Swap(other *SList[T]) {
 	other.hookFunc, s.hookFunc = s.hookFunc, other.hookFunc
@@ -53,9 +68,14 @@ func (s *SList[T]) Swap(other *SList[T]) {
 	other.size, s.size = s.size, other.size
 }
 
-// Get current length of SList
-func (s SList[T]) Len() int {
-	return s.size
+// Return first element in SList
+func (s SList[T]) Front() *T {
+	return s.first
+}
+
+// Return last element in SList
+func (s SList[T]) Back() *T {
+	return s.last
 }
 
 // Insert new element after specified. Position SHOULD be part of current SList
@@ -115,12 +135,7 @@ func (s *SList[T]) SpliceAfter(position *T, other *SList[T]) {
 	other.Init()
 }
 
-// Return first element in SList
-func (s SList[T]) Front() *T {
-	return s.first
-}
-
-// Insert new element into the head of SList
+// Insert new element at the front of SList
 func (s *SList[T]) PushFront(element *T) {
 	s.verifyElementNotLinked(element)
 	defer s.verifyIsMemberOfCurrent(element)
@@ -136,7 +151,7 @@ func (s *SList[T]) PushFront(element *T) {
 	s.size++
 }
 
-// Unlink and return element at the head of a SList
+// Remove and return element from the front of a SList
 func (s *SList[T]) PopFront() (popped *T) {
 	if s.first == nil {
 		return nil
@@ -162,11 +177,6 @@ func (s *SList[T]) PopFront() (popped *T) {
 func (s *SList[T]) SpliceFront(other *SList[T]) {
 	other.SpliceBack(s)
 	s.Swap(other)
-}
-
-// Return last element in SList
-func (s SList[T]) Back() *T {
-	return s.last
 }
 
 // Insert new element into the tail of current SList

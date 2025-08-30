@@ -2048,8 +2048,6 @@ type fuzzEmbedItem struct {
 	isUsed bool
 }
 
-type fuzzEmbedOps struct{}
-
 func fuzzEmbedHook(self *fuzzEmbedItem) *Hook[fuzzEmbedItem] {
 	return &self.Hook
 }
