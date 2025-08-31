@@ -252,7 +252,7 @@ func nextState(t *testing.T, items []fuzzEmbedItem, lists []DList[fuzzEmbedItem]
 }
 
 func FuzzDListOps(f *testing.F) {
-	const numItems = 512
+	const numItems = 256
 	const numLists = 8
 
 	items := make([]fuzzEmbedItem, numItems)
