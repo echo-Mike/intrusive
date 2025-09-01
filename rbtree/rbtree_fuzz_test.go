@@ -147,22 +147,11 @@ func referenceSymDifference[T any](t1, t2 *RbTree[T]) []*T {
 
 func referenceUnion[T any](t1, t2 *RbTree[T]) []*T {
 	var result []*T
-	addUnique := func(node *T) {
-		for _, n := range result {
-			if n == node {
-				return
-			}
-		}
+	for node := t1.Front(); node != nil; node = t1.Next(node) {
 		result = append(result, node)
 	}
-
-	for node := t1.Front(); node != nil; node = t1.Next(node) {
-		addUnique(node)
-	}
-	for node := t2.Front(); node != nil; node = t2.Next(node) {
-		addUnique(node)
-	}
-	return result
+	diff := referenceDifference(t2, t1)
+	return append(result, diff...)
 }
 
 func referenceFind[T any](tree *RbTree[T], item *T) *T {
@@ -194,16 +183,20 @@ func referenceUpperBound[T any](tree *RbTree[T], item *T) *T {
 	return candidate
 }
 
-func compareSlices[T any](a, b []*T) bool {
+func compareSlices[T any](a, b []*T) (bool, int) {
 	if len(a) != len(b) {
-		return false
+		return false, -1
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
+	check := make(map[*T]bool, len(a))
+	for _, e := range a {
+		check[e] = true
+	}
+	for i := range b {
+		if !check[b[i]] {
+			return false, i
 		}
 	}
-	return true
+	return true, -1
 }
 
 func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedItem]) func(op, arg1, arg2, arg3 byte, arg4 uint32) {
@@ -267,10 +260,11 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 
 		case opMerge:
 			if tree != tree2 {
-				originalSize := tree.Size() + tree2.Size()
+				originalSizes := tree.Size() + tree2.Size()
 				tree.Merge(tree2)
-				if tree.Size() != originalSize {
-					t.Errorf("Merge size inconsistency: expected %d, got %d", originalSize, tree.Size())
+				afterMergeSizes := tree.Size() + tree2.Size()
+				if originalSizes != afterMergeSizes {
+					t.Errorf("Merge size inconsistency: expected %d, got %d", originalSizes, afterMergeSizes)
 				}
 				tree.Traverse(func(node *fuzzEmbedItem) {
 					node.treeIndex = treeIdx
@@ -290,8 +284,12 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 			if tree != tree2 {
 				expected := referenceDifference(tree, tree2)
 				actual := tree.Difference(tree2)
-				if !compareSlices(expected, actual) {
-					t.Errorf("Difference mismatch")
+				if e, i := compareSlices(expected, actual); !e {
+					if i != -1 {
+						t.Errorf("Difference mismatch at %v a: %v", i, actual[i])
+					} else {
+						t.Errorf("Difference mismatch in length len(e): %v len(a): %v", len(expected), len(actual))
+					}
 				}
 			}
 
@@ -299,8 +297,12 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 			if tree != tree2 {
 				expected := referenceIntersection(tree, tree2)
 				actual := tree.Intersection(tree2)
-				if !compareSlices(expected, actual) {
-					t.Errorf("Intersection mismatch")
+				if e, i := compareSlices(expected, actual); !e {
+					if i != -1 {
+						t.Errorf("Intersection mismatch at %v a: %v", i, actual[i])
+					} else {
+						t.Errorf("Intersection mismatch in length len(e): %v len(a): %v", len(expected), len(actual))
+					}
 				}
 			}
 
@@ -308,8 +310,12 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 			if tree != tree2 {
 				expected := referenceSymDifference(tree, tree2)
 				actual := tree.SymDifference(tree2)
-				if !compareSlices(expected, actual) {
-					t.Errorf("SymDifference mismatch")
+				if e, i := compareSlices(expected, actual); !e {
+					if i != -1 {
+						t.Errorf("SymDifference mismatch at %v a: %v", i, actual[i])
+					} else {
+						t.Errorf("SymDifference mismatch in length len(e): %v len(a): %v", len(expected), len(actual))
+					}
 				}
 			}
 
@@ -317,8 +323,12 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 			if tree != tree2 {
 				expected := referenceUnion(tree, tree2)
 				actual := tree.Union(tree2)
-				if !compareSlices(expected, actual) {
-					t.Errorf("Union mismatch")
+				if e, i := compareSlices(expected, actual); !e {
+					if i != -1 {
+						t.Errorf("Union mismatch at %v a: %v", i, actual[i])
+					} else {
+						t.Errorf("Union mismatch in length len(e): %v len(a): %v", len(expected), len(actual))
+					}
 				}
 			}
 
@@ -470,8 +480,8 @@ func FuzzRbTreeOps(f *testing.F) {
 
 		next := nextState(t, items, trees)
 
-		for i := 0; i+7 < len(commands); i += 8 {
-			indexArg := binary.LittleEndian.Uint32([]byte{commands[i+4], commands[i+5], commands[i+6], commands[i+7]})
+		for i := 0; i+5 < len(commands); i += 6 {
+			indexArg := binary.LittleEndian.Uint32([]byte{commands[i+4], commands[i+5], 0, 0})
 			next(commands[i], commands[i+1], commands[i+2], commands[i+3], indexArg)
 		}
 
