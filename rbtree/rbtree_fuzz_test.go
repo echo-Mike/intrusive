@@ -111,6 +111,9 @@ func verifyTreeConsistency(t *testing.T, tree *RbTree[fuzzEmbedItem], treeIdx in
 }
 
 func referenceIncludes[T any](t1, t2 *RbTree[T]) bool {
+	if t2 == nil {
+		return false
+	}
 	for node := t2.Front(); node != nil; node = t2.Next(node) {
 		if t1.Find(node) == nil {
 			return false
@@ -121,7 +124,7 @@ func referenceIncludes[T any](t1, t2 *RbTree[T]) bool {
 
 func referenceDifference[T any](t1, t2 *RbTree[T]) []*T {
 	var result []*T
-	for node := t1.Front(); node != nil; node = t1.Next(node) {
+	for node := t1.Front(); node != nil && t2 != nil; node = t1.Next(node) {
 		if t2.Find(node) == nil {
 			result = append(result, node)
 		}
@@ -131,7 +134,7 @@ func referenceDifference[T any](t1, t2 *RbTree[T]) []*T {
 
 func referenceIntersection[T any](t1, t2 *RbTree[T]) []*T {
 	var result []*T
-	for node := t1.Front(); node != nil; node = t1.Next(node) {
+	for node := t1.Front(); node != nil && t2 != nil; node = t1.Next(node) {
 		if t2.Find(node) != nil {
 			result = append(result, node)
 		}
@@ -140,6 +143,9 @@ func referenceIntersection[T any](t1, t2 *RbTree[T]) []*T {
 }
 
 func referenceSymDifference[T any](t1, t2 *RbTree[T]) []*T {
+	if t2 == nil {
+		return nil
+	}
 	diff1 := referenceDifference(t1, t2)
 	diff2 := referenceDifference(t2, t1)
 	return append(diff1, diff2...)
@@ -147,6 +153,9 @@ func referenceSymDifference[T any](t1, t2 *RbTree[T]) []*T {
 
 func referenceUnion[T any](t1, t2 *RbTree[T]) []*T {
 	var result []*T
+	if t2 == nil {
+		return result
+	}
 	for node := t1.Front(); node != nil; node = t1.Next(node) {
 		result = append(result, node)
 	}
@@ -155,7 +164,7 @@ func referenceUnion[T any](t1, t2 *RbTree[T]) []*T {
 }
 
 func referenceFind[T any](tree *RbTree[T], item *T) *T {
-	for node := tree.Front(); node != nil; node = tree.Next(node) {
+	for node := tree.Front(); node != nil && item != nil; node = tree.Next(node) {
 		if !tree.lessFunc(node, item) && !tree.lessFunc(item, node) {
 			return node
 		}
@@ -165,7 +174,7 @@ func referenceFind[T any](tree *RbTree[T], item *T) *T {
 
 func referenceLowerBound[T any](tree *RbTree[T], item *T) *T {
 	var candidate *T
-	for node := tree.Front(); node != nil; node = tree.Next(node) {
+	for node := tree.Front(); node != nil && item != nil; node = tree.Next(node) {
 		if !tree.lessFunc(node, item) && (candidate == nil || tree.lessFunc(node, candidate)) {
 			candidate = node
 		}
@@ -175,7 +184,7 @@ func referenceLowerBound[T any](tree *RbTree[T], item *T) *T {
 
 func referenceUpperBound[T any](tree *RbTree[T], item *T) *T {
 	var candidate *T
-	for node := tree.Front(); node != nil; node = tree.Next(node) {
+	for node := tree.Front(); node != nil && item != nil; node = tree.Next(node) {
 		if tree.lessFunc(item, node) && (candidate == nil || tree.lessFunc(node, candidate)) {
 			candidate = node
 		}
@@ -208,24 +217,40 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 		tree := trees[treeIdx]
 		item := &items[itemIdx]
 		tree2 := trees[tree2Idx]
+		if 196 < arg2 {
+			item = nil
+			tree2 = nil
+
+			// Special cases
+			switch op {
+			case 255:
+				if tree.Next(item) != nil {
+					t.Errorf("Failed to handle nil on Next()")
+				}
+			case 254:
+				if tree.Prev(item) != nil {
+					t.Errorf("Failed to handle nil on Prev()")
+				}
+			}
+		}
 
 		switch op % opCOUNT {
 		case opInsert:
-			if !item.isUsed {
+			if item == nil || !item.isUsed {
 				if tree.Insert(item) {
 					item.isUsed = true
 					item.treeIndex = treeIdx
-				} else if !tree.Contains(item) {
+				} else if item != nil && !tree.Contains(item) {
 					t.Errorf("Failed to insert item %v", item)
 				}
 			}
 
 		case opErase:
-			if item.isUsed && item.treeIndex == treeIdx {
+			if item == nil || item.isUsed && item.treeIndex == treeIdx {
 				if tree.Erase(item) {
 					item.isUsed = false
 					item.treeIndex = 0
-				} else {
+				} else if item != nil {
 					t.Errorf("Failed to erase item %v", item)
 				}
 			}
@@ -260,9 +285,15 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 
 		case opMerge:
 			if tree != tree2 {
-				originalSizes := tree.Size() + tree2.Size()
+				originalSizes := tree.Size()
+				if tree2 != nil {
+					originalSizes += tree2.Size()
+				}
 				tree.Merge(tree2)
-				afterMergeSizes := tree.Size() + tree2.Size()
+				afterMergeSizes := tree.Size()
+				if tree2 != nil {
+					afterMergeSizes += tree2.Size()
+				}
 				if originalSizes != afterMergeSizes {
 					t.Errorf("Merge size inconsistency: expected %d, got %d", originalSizes, afterMergeSizes)
 				}
@@ -366,6 +397,9 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 			if tree.Size() < 0 {
 				t.Errorf("Negative tree size: %d", tree.Size())
 			}
+			if tree.Len() < 0 {
+				t.Errorf("Negative tree length: %d", tree.Len())
+			}
 
 		case opEmpty:
 			empty := tree.Empty()
@@ -421,17 +455,28 @@ func nextState(t *testing.T, items []fuzzEmbedItem, trees []*RbTree[fuzzEmbedIte
 
 		case opSwap:
 			if tree != tree2 {
-				size1, size2 := tree.Size(), tree2.Size()
+				size1, size2 := tree.Size(), 0
+				if tree2 != nil {
+					size2 += tree2.Size()
+				}
 				tree.Swap(tree2)
-				if tree.Size() != size2 || tree2.Size() != size1 {
-					t.Errorf("Swap size inconsistency")
+				if tree2 == nil && tree.Size() != size1 {
+					t.Errorf("Swap size inconsistency with nil")
+				}
+				if tree2 != nil && tree.Size() != size2 {
+					t.Errorf("Swap size inconsistency first tree")
+				}
+				if tree2 != nil && tree2.Size() != size1 {
+					t.Errorf("Swap size inconsistency second tree")
 				}
 				tree.Traverse(func(node *fuzzEmbedItem) {
 					node.treeIndex = treeIdx
 				})
-				tree2.Traverse(func(node *fuzzEmbedItem) {
-					node.treeIndex = tree2Idx
-				})
+				if tree2 != nil {
+					tree2.Traverse(func(node *fuzzEmbedItem) {
+						node.treeIndex = tree2Idx
+					})
+				}
 			}
 
 		case opInit:

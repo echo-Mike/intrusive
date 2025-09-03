@@ -51,12 +51,18 @@ func NewRbTree[T any](hookFunc func(*T) *Hook[T], lessFunc func(*T, *T) bool) *R
 
 // Next returns the next node in in-order traversal
 func (t RbTree[T]) Next(node *T) *T {
+	if node == nil {
+		return nil
+	}
 	t.verifyIsMemberOfCurrent(node)
 	return t.next(node)
 }
 
 // Prev returns the previous node in in-order traversal
 func (t RbTree[T]) Prev(node *T) *T {
+	if node == nil {
+		return nil
+	}
 	t.verifyIsMemberOfCurrent(node)
 	return t.prev(node)
 }
@@ -315,6 +321,9 @@ func (t RbTree[T]) Len() int {
 
 // Swap exchanges contents with another tree
 func (t *RbTree[T]) Swap(other *RbTree[T]) {
+	if other == nil {
+		return
+	}
 	other.hookFunc, t.hookFunc = t.hookFunc, other.hookFunc
 	other.lessFunc, t.lessFunc = t.lessFunc, other.lessFunc
 	t.root, other.root = other.root, t.root
@@ -393,6 +402,9 @@ func (t RbTree[T]) TraversePostOrder(f func(*T)) {
 
 // Insert adds a new node to the tree
 func (t *RbTree[T]) Insert(item *T) bool {
+	if item == nil {
+		return false
+	}
 	t.verifyElementNotLinked(item)
 	defer t.verify()
 
@@ -492,7 +504,7 @@ func (t *RbTree[T]) Erase(item *T) bool {
 
 // Merge combines two trees
 func (t *RbTree[T]) Merge(other *RbTree[T]) {
-	if other.size == 0 {
+	if other == nil || other.size == 0 {
 		return
 	}
 	defer t.verify()
@@ -517,6 +529,9 @@ func (t RbTree[T]) Contains(item *T) bool {
 
 // Find searches for an element that compares equal with item
 func (t RbTree[T]) Find(item *T) *T {
+	if item == nil {
+		return nil
+	}
 	current := t.root
 	for current != nil {
 		if t.lessFunc(item, current) {
@@ -532,6 +547,9 @@ func (t RbTree[T]) Find(item *T) *T {
 
 // LowerBound finds first element not less than item
 func (t RbTree[T]) LowerBound(item *T) *T {
+	if item == nil {
+		return nil
+	}
 	var candidate *T
 	current := t.root
 	for current != nil {
@@ -547,6 +565,9 @@ func (t RbTree[T]) LowerBound(item *T) *T {
 
 // UpperBound finds first element greater than item
 func (t RbTree[T]) UpperBound(item *T) *T {
+	if item == nil {
+		return nil
+	}
 	var candidate *T
 	current := t.root
 	for current != nil {
@@ -591,6 +612,9 @@ func (t *RbTree[T]) EraseIf(predicate func(*T) bool) (erased []*T) {
 
 // Includes checks if tree contains all elements of another tree
 func (t RbTree[T]) Includes(other *RbTree[T]) bool {
+	if other == nil {
+		return false
+	}
 	if other.size == 0 {
 		return true
 	}
@@ -612,6 +636,9 @@ func (t RbTree[T]) Includes(other *RbTree[T]) bool {
 // Difference returns elements in tree but not in other
 func (t RbTree[T]) Difference(other *RbTree[T]) []*T {
 	var result []*T
+	if other == nil {
+		return result
+	}
 	a := t.Front()
 	b := other.Front()
 	for a != nil && b != nil {
@@ -635,6 +662,9 @@ func (t RbTree[T]) Difference(other *RbTree[T]) []*T {
 // Intersection returns elements common to both trees
 func (t RbTree[T]) Intersection(other *RbTree[T]) []*T {
 	var result []*T
+	if other == nil {
+		return result
+	}
 	a := t.Front()
 	b := other.Front()
 	for a != nil && b != nil {
@@ -654,6 +684,9 @@ func (t RbTree[T]) Intersection(other *RbTree[T]) []*T {
 // SymDifference returns elements not common to both trees
 func (t RbTree[T]) SymDifference(other *RbTree[T]) []*T {
 	var result []*T
+	if other == nil {
+		return result
+	}
 	a := t.Front()
 	b := other.Front()
 	for a != nil && b != nil {
@@ -682,6 +715,9 @@ func (t RbTree[T]) SymDifference(other *RbTree[T]) []*T {
 // Union returns all elements from both trees
 func (t RbTree[T]) Union(other *RbTree[T]) []*T {
 	var result []*T
+	if other == nil {
+		return result
+	}
 	a := t.Front()
 	b := other.Front()
 	for a != nil && b != nil {
